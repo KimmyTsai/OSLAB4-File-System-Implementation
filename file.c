@@ -67,22 +67,26 @@ static ssize_t osfs_read(struct file *filp, char __user *buf, size_t len, loff_t
 //3. 支援跨區塊連續寫入 (直到 MAX_EXTENTS)
 static ssize_t osfs_write(struct file *filp, const char __user *buf, size_t len, loff_t *ppos)
 {   
-    struct inode *inode = file_inode(filp);
+    //Step1: Retrieve the inode and filesystem information
+    struct inode *inode = file_inode(filp); // VFS inode
     struct osfs_inode *osfs_inode = inode->i_private;
     struct osfs_sb_info *sb_info = inode->i_sb->s_fs_info;
     void *data_block;
     ssize_t bytes_written = 0;
     int ret;
     struct timespec64 now;
-    
+
     size_t chunk_len;
     uint32_t logical_block_index;
     uint32_t physical_block_no;
     size_t offset_in_block;
 
+    // Bonus才有迴圈
     // Loop to handle writes that span multiple blocks
     while (len > 0) {
+        // 計算目前寫入位置 (*ppos) 對應的是第幾個邏輯區塊 (0, 1, 2, 3, 4...)
         logical_block_index = *ppos / BLOCK_SIZE;
+        // 計算在該區塊內的偏移量 (0 ~ 4095)
         offset_in_block = *ppos % BLOCK_SIZE;
         
         // Max file size check
@@ -91,6 +95,7 @@ static ssize_t osfs_write(struct file *filp, const char __user *buf, size_t len,
             return -ENOSPC;
         }
 
+        // Step2: Check if a data block has been allocated; if not, allocate one
         // Allocate new blocks if needed
         // If we need block N, and current i_blocks is N, we need to allocate.
         // Assumes sequential filling.
@@ -100,19 +105,28 @@ static ssize_t osfs_write(struct file *filp, const char __user *buf, size_t len,
                  if (bytes_written > 0) break;
                  return ret;
             }
+            // 將申請到的實體區塊號碼存入陣列中 (建立索引)
             osfs_inode->i_blocks_array[logical_block_index] = physical_block_no;
             osfs_inode->i_blocks++;
             inode->i_blocks++; // Update VFS inode blocks count (in 512B units typically, but here simplified)
         } else {
+            // 如果已經分配過，直接從陣列查表取得實體區塊號碼
             physical_block_no = osfs_inode->i_blocks_array[logical_block_index];
         }
 
-        chunk_len = BLOCK_SIZE - offset_in_block;
+        // Step 3: Limit the write length to fit within one data block
+        // 計算這個區塊還剩下多少空間可以寫
+        // 例如：BlockSize是4096，已經寫了4000，那這輪只能再寫96 bytes
+        chunk_len = BLOCK_SIZE - offset_in_block; // 多的下輪迴圈再寫
         if (chunk_len > len)
             chunk_len = len;
 
+        // Step 4: Write data from user space to the data block
+        // 計算實際記憶體位址：
+        // 起始位址 (data_blocks) + 偏移幾個區塊 (physical_block_no * 4096) + 區塊內偏移
         data_block = sb_info->data_blocks + physical_block_no * BLOCK_SIZE + offset_in_block;
         
+        // 使用 copy_from_user 將資料從使用者空間 (buf) 複製到核心空間 (data_block)
         if (copy_from_user(data_block, buf, chunk_len)) {
             return -EFAULT;
         }
@@ -123,7 +137,8 @@ static ssize_t osfs_write(struct file *filp, const char __user *buf, size_t len,
         bytes_written += chunk_len;
     }
 
-    // Update inode & osfs_inode attribute
+    // Step 5: Update inode & osfs_inode attribute
+    // 如果寫入後的位置 (*ppos) 超過了原本的檔案大小，就要更新檔案大小 (i_size)
     if (*ppos > osfs_inode->i_size) {
         osfs_inode->i_size = *ppos;
         inode->i_size = *ppos;
@@ -139,6 +154,7 @@ static ssize_t osfs_write(struct file *filp, const char __user *buf, size_t len,
     
     mark_inode_dirty(inode);
 
+    // Step 6: Return the number of bytes written
     return bytes_written;
 }
 

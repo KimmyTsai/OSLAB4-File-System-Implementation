@@ -262,6 +262,7 @@ static int osfs_add_dir_entry(struct inode *dir, uint32_t inode_no, const char *
 static int osfs_create(struct mnt_idmap *idmap, struct inode *dir, struct dentry *dentry, umode_t mode, bool excl)
 {   
     // Step1: Parse the parent directory passed by the VFS 
+    // dir 是父目錄的 VFS inode，我們透過 i_private 取得我們自定義的 osfs_inode
     struct osfs_inode *parent_inode = dir->i_private;
     struct osfs_inode *osfs_inode;
     struct inode *inode;
@@ -269,16 +270,21 @@ static int osfs_create(struct mnt_idmap *idmap, struct inode *dir, struct dentry
     struct timespec64 now;
 
     // Step2: Validate the file name length
+    // dentry->d_name 包含檔名。如果檔名超過 255 字元，則拒絕建立。
     if (dentry->d_name.len > MAX_FILENAME_LEN) {
         return -ENAMETOOLONG;
     }
 
     // Step3: Allocate and initialize VFS & osfs inode
+    // 呼叫 osfs_new_inode (在同一個檔案上方定義)，它會做兩件事：
+    // 1. 在 inode bitmap 中找一個空閒的 inode 編號。
+    // 2. 建立一個 Linux VFS inode 和一個對應的 osfs_inode。
     inode = osfs_new_inode(dir, mode);
     if (IS_ERR(inode)) {
         return PTR_ERR(inode);
     }
 
+    // 取得剛剛建立好的 osfs_inode
     osfs_inode = inode->i_private;
     if (!osfs_inode) {
         pr_err("osfs_create: Failed to get osfs_inode for inode %lu\n", inode->i_ino);
@@ -288,6 +294,8 @@ static int osfs_create(struct mnt_idmap *idmap, struct inode *dir, struct dentry
     // Note: Initialization is handled in osfs_new_inode now (including delayed allocation logic)
 
     // Step4: Parent directory entry update for the new file
+    // 呼叫 osfs_add_dir_entry，這會把 "檔名" 和 "Inode編號" 寫入父目錄的資料區塊中。
+    // 這樣下次 ls 的時候才能看到這個檔案。
     ret = osfs_add_dir_entry(dir, inode->i_ino, dentry->d_name.name, dentry->d_name.len);
     if (ret) {
         pr_err("osfs_create: Failed to add directory entry\n");
@@ -295,7 +303,8 @@ static int osfs_create(struct mnt_idmap *idmap, struct inode *dir, struct dentry
         return ret;
     }
 
-    // Step 5: Update the parent directory's metadata 
+    // Step 5: Update the parent directory's metadata
+    // 因為目錄裡多了一個檔案，目錄的修改時間 (mtime) 和改變時間 (ctime) 要更新 
     now = current_time(dir);
     inode_set_mtime_to_ts(dir, now);
     inode_set_ctime_to_ts(dir, now);
@@ -305,6 +314,8 @@ static int osfs_create(struct mnt_idmap *idmap, struct inode *dir, struct dentry
     mark_inode_dirty(dir);
     
     // Step 6: Bind the inode to the VFS dentry
+    // 將 VFS 的目錄項目 (dentry) 與我們新建立的 inode 連結起來。
+    // 這是 Linux VFS 的關鍵步驟，完成後檔案才算正式存在於 VFS 層。
     d_instantiate(dentry, inode);
 
     pr_info("osfs_create: File '%.*s' created with inode %lu\n",
