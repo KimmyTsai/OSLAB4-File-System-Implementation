@@ -6,6 +6,8 @@
  * Function: osfs_read
  * Description: Reads data from a file, supporting multiple blocks (Bonus).
  */
+// 原始：直接去抓 i_block，然後 copy_to_user。
+// Bonus: 迴圈邏輯：計算 logical_block_index (目前讀到第幾塊)、查表 i_blocks_array[index]找實體區塊、支援跨區塊連續讀取。
 static ssize_t osfs_read(struct file *filp, char __user *buf, size_t len, loff_t *ppos)
 {
     struct inode *inode = file_inode(filp);
@@ -58,6 +60,11 @@ static ssize_t osfs_read(struct file *filp, char __user *buf, size_t len, loff_t
  * Function: osfs_write
  * Description: Writes data to a file, allocating multiple blocks as needed (Bonus).
  */
+// 原始：若無 Block 則分配、若寫入超過 4KB 則回傳錯誤或截斷、寫入單一 Block
+// Bonus: 迴圈邏輯 (Loop) + 動態分配
+//1. 計算目前寫入位置需要第幾個 Block (index)
+//2. 如果該 index 還沒分配，呼叫 osfs_alloc_data_block 動態新增
+//3. 支援跨區塊連續寫入 (直到 MAX_EXTENTS)
 static ssize_t osfs_write(struct file *filp, const char __user *buf, size_t len, loff_t *ppos)
 {   
     struct inode *inode = file_inode(filp);

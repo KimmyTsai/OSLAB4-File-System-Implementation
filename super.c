@@ -33,6 +33,8 @@ void osfs_destroy_inode(struct inode *inode)
  * - 0 on successful initialization.
  * - A negative error code on failure.
  */
+// 原始：僅初始化 Root Inode，未明確分配資料區塊 (依賴 memset 0)。
+// Bonus: 明確分配 Root Directory 的第 1 個區塊 (i_blocks_array[0])。
 int osfs_fill_super(struct super_block *sb, void *data, int silent)
 {
     pr_info("osfs: Filling super start\n");

@@ -100,6 +100,11 @@ static int osfs_iterate(struct file *filp, struct dir_context *ctx)
  * Function: osfs_new_inode
  * Description: Creates a new inode within the filesystem.
  */
+// 原始：立即分配：無論是目錄或檔案，一律呼叫 osfs_alloc_data_block 分配區塊。
+// Bonus: 區分策略：
+//1. 目錄：立即分配 array[0]。
+//2. 檔案：不分配 (Delayed Allocation)，將陣列清零並回傳。
+
 struct inode *osfs_new_inode(const struct inode *dir, umode_t mode)
 {
     struct super_block *sb = dir->i_sb;
