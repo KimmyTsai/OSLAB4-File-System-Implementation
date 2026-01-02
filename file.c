@@ -26,11 +26,12 @@ static ssize_t osfs_read(struct file *filp, char __user *buf, size_t len, loff_t
     if (*ppos + len > osfs_inode->i_size)
         len = osfs_inode->i_size - *ppos;
 
+    // Bonus 才有迴圈，因檔案可能大於4KB
     while (len > 0) {
         logical_block_index = *ppos / BLOCK_SIZE;
         offset_in_block = *ppos % BLOCK_SIZE;
         chunk_len = BLOCK_SIZE - offset_in_block;
-        if (chunk_len > len)
+        if (chunk_len > len) //大於len 下一輪再做
             chunk_len = len;
 
         // Check if we have a valid block for this logical index
@@ -39,7 +40,10 @@ static ssize_t osfs_read(struct file *filp, char __user *buf, size_t len, loff_t
             break;
         }
 
+        // 原版: physical = osfs_inode->i_block
+        // Bonus: 從陣列查表 physical = osfs_inode->i_blocks_array[index]
         physical_block_no = osfs_inode->i_blocks_array[logical_block_index];
+        // 計算記憶體位址並複製給使用者
         data_block = sb_info->data_blocks + physical_block_no * BLOCK_SIZE + offset_in_block;
 
         if (copy_to_user(buf, data_block, chunk_len)) {

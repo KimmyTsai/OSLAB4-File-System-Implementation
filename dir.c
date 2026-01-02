@@ -107,7 +107,7 @@ static int osfs_iterate(struct file *filp, struct dir_context *ctx)
 
 struct inode *osfs_new_inode(const struct inode *dir, umode_t mode)
 {
-    struct super_block *sb = dir->i_sb;
+    struct super_block *sb                             = dir->i_sb;
     struct osfs_sb_info *sb_info = sb->s_fs_info;
     struct inode *inode;
     struct osfs_inode *osfs_inode;
@@ -174,7 +174,7 @@ struct inode *osfs_new_inode(const struct inode *dir, umode_t mode)
     osfs_inode->i_gid = i_gid_read(inode);
     osfs_inode->i_size = inode->i_size;
     
-    // BONUS: Initialize array and i_blocks
+    // BONUS: 將整個陣列清零，確保沒有殘留的垃圾值
     memset(osfs_inode->i_blocks_array, 0, sizeof(osfs_inode->i_blocks_array));
     osfs_inode->i_blocks = 0;
 
@@ -279,7 +279,7 @@ static int osfs_create(struct mnt_idmap *idmap, struct inode *dir, struct dentry
     // 呼叫 osfs_new_inode (在同一個檔案上方定義)，它會做兩件事：
     // 1. 在 inode bitmap 中找一個空閒的 inode 編號。
     // 2. 建立一個 Linux VFS inode 和一個對應的 osfs_inode。
-    inode = osfs_new_inode(dir, mode);
+    inode = osfs_new_inode(dir, mode); //VSF inode
     if (IS_ERR(inode)) {
         return PTR_ERR(inode);
     }

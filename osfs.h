@@ -70,7 +70,8 @@ struct osfs_inode {
     struct timespec64 __i_mtime;        // Last modification time
     struct timespec64 __i_ctime;        // Creation time
     
-    // BONUS: Changed from single i_block to an array of blocks
+    // 原版: uint32_t i_block;  <-- 只存一個整數，指向唯一的資料區塊
+    // Bonus: uint32_t i_blocks_array[MAX_EXTENTS]; <-- 改成陣列，存多個區塊編號
     uint32_t i_blocks_array[MAX_EXTENTS]; 
 };
 

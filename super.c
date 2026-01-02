@@ -33,6 +33,7 @@ void osfs_destroy_inode(struct inode *inode)
  * - 0 on successful initialization.
  * - A negative error code on failure.
  */
+// 檔案系統初始化：計算記憶體大小、分配記憶體、切割記憶體、初始化bitmap、建立根目錄
 // 原始：僅初始化 Root Inode，未明確分配資料區塊 (依賴 memset 0)。
 // Bonus: 明確分配 Root Directory 的第 1 個區塊 (i_blocks_array[0])。
 int osfs_fill_super(struct super_block *sb, void *data, int silent)
@@ -42,7 +43,7 @@ int osfs_fill_super(struct super_block *sb, void *data, int silent)
     struct osfs_sb_info *sb_info;
     void *memory_region;
     size_t total_memory_size;
-    uint32_t root_block;
+    uint32_t root_block; //Bonus: 呼叫分配器取得一個實體 Block
     int ret;
 
     // Calculate total memory size required
@@ -126,6 +127,8 @@ int osfs_fill_super(struct super_block *sb, void *data, int silent)
         vfree(memory_region);
         return ret;
     }
+
+    // Bonus: 將分配到的 Block 號碼存入陣列的第一個位置
     root_osfs_inode->i_blocks_array[0] = root_block;
     root_osfs_inode->i_blocks = 1;
     root_inode->i_blocks = 1;
